@@ -1,0 +1,15 @@
+{
+  "name": "iptv-aggregator",
+  "version": "1.0.0",
+  "description": "简易的 IPTV 源聚合工具",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["iptv", "m3u", "aggregator"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+}

@@ -1,0 +1,7 @@
+# 这是订阅源列表，每行一个订阅地址
+# This is a list of subscription sources, with one subscription address per line
+
+https://bxtv.3a.ink/live.m3u
+https://php.946985.filegear-sg.me/jackTV.m3u
+https://live.hacks.tools/tv/ipv4/categories/hong_kong.m3u
+https://live.hacks.tools/tv/iptv4.m3u
