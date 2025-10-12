@@ -8,6 +8,23 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'default_admin_token';
 
+// 文件路径配置
+const SOURCE_DIR = 'source';
+const OUTPUT_DIR = 'output';
+
+const CONFIG_FILES = {
+  epg: path.join(SOURCE_DIR, 'epg.txt'),
+  logo: path.join(SOURCE_DIR, 'logo.txt'),
+  alias: path.join(SOURCE_DIR, 'alias.txt'),
+  subscribe: path.join(SOURCE_DIR, 'subscribe.txt'),
+  template: path.join(SOURCE_DIR, 'template.txt')
+};
+
+const OUTPUT_FILES = {
+  m3u: path.join(OUTPUT_DIR, 'output.m3u'),
+  txt: path.join(OUTPUT_DIR, 'output.txt')
+};
+
 // 中间件
 app.use(cors());
 app.use(express.json());
@@ -52,27 +69,23 @@ app.get('/health', (req, res) => {
 
 // 获取 M3U 文件
 app.get('/playlist.m3u', (req, res) => {
-  const m3uPath = path.join(__dirname, 'output.m3u');
-
-  if (!fs.existsSync(m3uPath)) {
+  if (!fs.existsSync(OUTPUT_FILES.m3u)) {
     return res.status(404).json({ error: 'M3U 文件不存在，请先触发更新' });
   }
 
   res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
   res.setHeader('Content-Disposition', 'inline; filename="playlist.m3u"');
-  res.sendFile(m3uPath);
+  res.sendFile(path.resolve(OUTPUT_FILES.m3u));
 });
 
 // 获取 TXT 文件
 app.get('/playlist.txt', (req, res) => {
-  const txtPath = path.join(__dirname, 'output.txt');
-
-  if (!fs.existsSync(txtPath)) {
+  if (!fs.existsSync(OUTPUT_FILES.txt)) {
     return res.status(404).json({ error: 'TXT 文件不存在，请先触发更新' });
   }
 
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.sendFile(txtPath);
+  res.sendFile(path.resolve(OUTPUT_FILES.txt));
 });
 
 // 触发更新（需要 token）
@@ -98,16 +111,16 @@ app.post('/update', verifyToken, async (req, res) => {
     const aggregator = new IPTVAggregator();
 
     // 加载配置
-    aggregator.loadEPG('epg.txt');
-    aggregator.loadLogos('logo.txt');
-    aggregator.loadAliases('alias.txt');
+    aggregator.loadEPG(CONFIG_FILES.epg);
+    aggregator.loadLogos(CONFIG_FILES.logo);
+    aggregator.loadAliases(CONFIG_FILES.alias);
 
     // 处理订阅
-    await aggregator.processSubscriptions('subscribe.txt');
+    await aggregator.processSubscriptions(CONFIG_FILES.subscribe);
 
     // 导出结果
-    aggregator.exportM3UWithTemplate('template.txt', 'output.m3u');
-    aggregator.exportTXT('output.txt');
+    aggregator.exportM3UWithTemplate(CONFIG_FILES.template, OUTPUT_FILES.m3u);
+    aggregator.exportTXT(OUTPUT_FILES.txt);
 
     lastUpdateTime = new Date().toISOString();
     lastUpdateStatus = {
@@ -136,8 +149,8 @@ app.get('/status', (req, res) => {
     lastUpdate: lastUpdateTime,
     lastUpdateStatus,
     files: {
-      m3u: fs.existsSync('output.m3u'),
-      txt: fs.existsSync('output.txt')
+      m3u: fs.existsSync(OUTPUT_FILES.m3u),
+      txt: fs.existsSync(OUTPUT_FILES.txt)
     }
   });
 });
@@ -168,12 +181,12 @@ async function initUpdate() {
 
   try {
     const aggregator = new IPTVAggregator();
-    aggregator.loadEPG('epg.txt');
-    aggregator.loadLogos('logo.txt');
-    aggregator.loadAliases('alias.txt');
-    await aggregator.processSubscriptions('subscribe.txt');
-    aggregator.exportM3UWithTemplate('template.txt', 'output.m3u');
-    aggregator.exportTXT('output.txt');
+    aggregator.loadEPG(CONFIG_FILES.epg);
+    aggregator.loadLogos(CONFIG_FILES.logo);
+    aggregator.loadAliases(CONFIG_FILES.alias);
+    await aggregator.processSubscriptions(CONFIG_FILES.subscribe);
+    aggregator.exportM3UWithTemplate(CONFIG_FILES.template, OUTPUT_FILES.m3u);
+    aggregator.exportTXT(OUTPUT_FILES.txt);
 
     lastUpdateTime = new Date().toISOString();
     lastUpdateStatus = {
@@ -204,3 +217,4 @@ app.listen(PORT, async () => {
   // 启动时自动更新
   await initUpdate();
 });
+

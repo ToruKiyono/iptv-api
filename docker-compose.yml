@@ -11,10 +11,7 @@ services:
       - ADMIN_TOKEN=${ADMIN_TOKEN:-your_secure_token_here}
     volumes:
       # 挂载配置文件（可选，如果需要在运行时修改配置）
-      - ./subscribe.txt:/app/subscribe.txt
-      - ./alias.txt:/app/alias.txt
-      - ./template.txt:/app/template.txt
-      - ./epg.txt:/app/epg.txt
+      - ./source:/app/source
       # 挂载输出文件（持久化）
       - ./output:/app/output
     restart: unless-stopped
@@ -30,3 +27,4 @@ services:
 # 2. 运行: docker-compose up -d
 # 3. 查看日志: docker-compose logs -f
 # 4. 停止: docker-compose down
+
