@@ -1,0 +1,33 @@
+# Docker ignore file
+
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Output files (will be generated in container)
+output.m3u
+output.txt
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (optional, keep if you want docs in image)
+# README.md
+
+# Docker files
+docker-compose.yml
+Dockerfile
+.dockerignore

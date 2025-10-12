@@ -8,6 +8,10 @@ package-lock.json
 # Output files
 output.m3u
 output.txt
+output/
+
+# Environment
+.env
 
 # IDE
 .vscode/

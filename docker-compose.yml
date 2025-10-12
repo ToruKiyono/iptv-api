@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  iptv-api:
+    build: .
+    container_name: iptv-aggregator
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-your_secure_token_here}
+    volumes:
+      # 挂载配置文件（可选，如果需要在运行时修改配置）
+      - ./subscribe.txt:/app/subscribe.txt
+      - ./alias.txt:/app/alias.txt
+      - ./template.txt:/app/template.txt
+      - ./epg.txt:/app/epg.txt
+      # 挂载输出文件（持久化）
+      - ./output:/app/output
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); });"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+# 使用方法：
+# 1. 创建 .env 文件并设置 ADMIN_TOKEN=your_token
+# 2. 运行: docker-compose up -d
+# 3. 查看日志: docker-compose logs -f
+# 4. 停止: docker-compose down
