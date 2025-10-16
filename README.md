@@ -19,6 +19,7 @@
 - 🌐 **Web API 支持**
 - 🐳 **Docker 一键部署**
 - 🔐 **Token 认证保护**
+- 🧭 **结构化日志与配置校验**
 
 ## 快速开始
 
@@ -104,7 +105,13 @@ POST /update?token=YOUR_TOKEN
 GET /status
 ```
 
-### 5. API 文档
+### 5. 重新加载并校验配置（需要 token）
+```bash
+POST /reload-config
+Authorization: Bearer YOUR_TOKEN
+```
+
+### 6. API 文档
 ```bash
 GET /
 ```
@@ -156,6 +163,12 @@ https://e.erw.cc/e.xml
 CCTV-1,https://example.com/logo/cctv1.png
 翡翠台,https://example.com/logo/jade.png
 ```
+
+## 配置校验与日志
+
+- Web API 在启动以及每次 `/update`、`/reload-config` 请求时都会检查配置文件格式，如果存在错误会阻止更新并返回错误列表。
+- CLI 模式会先执行同样的校验，确保在写入输出文件前就能发现问题。
+- 所有模块使用结构化 JSON 日志输出，可通过 `LOG_LEVEL=debug` 环境变量查看更多细节。
 
 ## Docker 环境变量
 

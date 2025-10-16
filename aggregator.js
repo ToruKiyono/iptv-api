@@ -1,13 +1,17 @@
 const fs = require('fs');
 const axios = require('axios');
-const path = require('path');
+const { createLogger } = require('./logger');
 
 class IPTVAggregator {
-  constructor() {
+  constructor(options = {}) {
+    this.logger = options.logger || createLogger({ module: 'aggregator' });
+    this.networkLogger = this.logger.child({ scope: 'network' });
+    this.parserLogger = this.logger.child({ scope: 'parser' });
     this.channels = new Map(); // 使用 Map 存储频道，key: 名称, value: [channel objects]
     this.aliases = new Map(); // 别名映射，key: 别名, value: 标准名称
     this.logos = new Map(); // Logo 映射，key: 频道名称, value: logo URL
     this.epgUrls = []; // EPG 订阅地址列表
+    this.totalStreams = 0;
   }
 
   /**
@@ -16,7 +20,7 @@ class IPTVAggregator {
   loadEPG(epgFile = 'epg.txt') {
     try {
       if (!fs.existsSync(epgFile)) {
-        console.log(`EPG 文件 ${epgFile} 不存在，跳过 EPG 处理`);
+        this.logger.info({ epgFile }, 'EPG 文件不存在，跳过处理');
         return;
       }
 
@@ -26,9 +30,9 @@ class IPTVAggregator {
         .filter(line => line && !line.startsWith('#'));
 
       this.epgUrls = lines;
-      console.log(`已加载 ${this.epgUrls.length} 个 EPG 订阅地址`);
+      this.logger.info({ epgCount: this.epgUrls.length, epgFile }, 'EPG 订阅地址加载完成');
     } catch (error) {
-      console.error(`读取 EPG 文件失败: ${error.message}`);
+      this.logger.error({ err: error, epgFile }, '读取 EPG 文件失败');
     }
   }
 
@@ -38,7 +42,7 @@ class IPTVAggregator {
   loadLogos(logoFile = 'logo.txt') {
     try {
       if (!fs.existsSync(logoFile)) {
-        console.log(`Logo 文件 ${logoFile} 不存在，跳过 Logo 处理`);
+        this.logger.info({ logoFile }, 'Logo 文件不存在，跳过处理');
         return;
       }
 
@@ -51,12 +55,14 @@ class IPTVAggregator {
           const channelName = parts[0];
           const logoUrl = parts[1];
           this.logos.set(channelName, logoUrl);
+        } else {
+          this.parserLogger.warn({ line }, 'Logo 配置格式不正确');
         }
       });
 
-      console.log(`已加载 ${this.logos.size} 个 Logo 配置`);
+      this.logger.info({ logoFile, logoCount: this.logos.size }, 'Logo 配置加载完成');
     } catch (error) {
-      console.error(`读取 Logo 文件失败: ${error.message}`);
+      this.logger.error({ err: error, logoFile }, '读取 Logo 文件失败');
     }
   }
 
@@ -73,7 +79,7 @@ class IPTVAggregator {
   loadAliases(aliasFile = 'alias.txt') {
     try {
       if (!fs.existsSync(aliasFile)) {
-        console.log(`别名文件 ${aliasFile} 不存在，跳过别名处理`);
+        this.logger.info({ aliasFile }, '别名文件不存在，跳过处理');
         return;
       }
 
@@ -82,7 +88,10 @@ class IPTVAggregator {
 
       lines.forEach(line => {
         const parts = line.split(',').map(s => s.trim());
-        if (parts.length < 2) return;
+        if (parts.length < 2) {
+          this.parserLogger.warn({ line }, '别名配置缺少别名');
+          return;
+        }
 
         const standardName = parts[0]; // 第一个是标准名称
         const aliases = parts.slice(1); // 其余的是别名
@@ -92,9 +101,9 @@ class IPTVAggregator {
         });
       });
 
-      console.log(`已加载 ${this.aliases.size} 个别名规则`);
+      this.logger.info({ aliasFile, aliasCount: this.aliases.size }, '别名规则加载完成');
     } catch (error) {
-      console.error(`读取别名文件失败: ${error.message}`);
+      this.logger.error({ err: error, aliasFile }, '读取别名文件失败');
     }
   }
 
@@ -222,7 +231,7 @@ class IPTVAggregator {
    */
   async fetchSubscription(url) {
     try {
-      console.log(`正在获取订阅: ${url}`);
+      this.networkLogger.info({ url }, '开始拉取订阅');
       const response = await axios.get(url, {
         timeout: 10000,
         headers: {
@@ -240,10 +249,19 @@ class IPTVAggregator {
         channels = this.parseTXT(content);
       }
 
-      console.log(`从 ${url} 获取到 ${channels.length} 个频道`);
+      if (channels.length === 0) {
+        this.networkLogger.warn({ url }, '订阅返回空频道列表');
+      } else {
+        this.networkLogger.info({ url, channelCount: channels.length }, '订阅获取完成');
+      }
       return channels;
     } catch (error) {
-      console.error(`获取订阅失败 ${url}: ${error.message}`);
+      this.networkLogger.error({
+        url,
+        err: error,
+        code: error.code,
+        status: error.response ? error.response.status : undefined
+      }, '获取订阅失败');
       return [];
     }
   }
@@ -281,7 +299,7 @@ class IPTVAggregator {
   async processSubscriptions(subscribeFile = 'subscribe.txt') {
     try {
       if (!fs.existsSync(subscribeFile)) {
-        console.error(`订阅文件 ${subscribeFile} 不存在`);
+        this.logger.error({ subscribeFile }, '订阅文件不存在');
         return;
       }
 
@@ -290,7 +308,7 @@ class IPTVAggregator {
         .map(line => line.trim())
         .filter(line => line && !line.startsWith('#'));
 
-      console.log(`找到 ${urls.length} 个订阅地址`);
+      this.logger.info({ subscribeFile, urlCount: urls.length }, '订阅地址解析完成');
 
       // 并发获取所有订阅
       const results = await Promise.all(
@@ -304,16 +322,17 @@ class IPTVAggregator {
         });
       });
 
-      console.log(`\n聚合完成，共 ${this.channels.size} 个频道`);
+      this.logger.info({ channelCount: this.channels.size }, '订阅聚合完成');
 
       // 统计总源数
       let totalUrls = 0;
       for (const channelList of this.channels.values()) {
         totalUrls += channelList.length;
       }
-      console.log(`总计 ${totalUrls} 个频道源`);
+      this.totalStreams = totalUrls;
+      this.logger.info({ streamCount: totalUrls }, '频道源统计完成');
     } catch (error) {
-      console.error(`处理订阅失败: ${error.message}`);
+      this.logger.error({ err: error, subscribeFile }, '处理订阅失败');
     }
   }
 
@@ -323,7 +342,7 @@ class IPTVAggregator {
   loadTemplate(templateFile = 'template.txt') {
     try {
       if (!fs.existsSync(templateFile)) {
-        console.log(`模版文件 ${templateFile} 不存在，使用默认格式`);
+        this.logger.warn({ templateFile }, '模版文件不存在，使用默认格式');
         return null;
       }
 
@@ -347,9 +366,14 @@ class IPTVAggregator {
             title: trimmed.replace(',#genre#', '').trim(),
             channels: []
           };
+          if (!currentCategory.title) {
+            this.parserLogger.warn({ line }, '模板分类名称为空');
+          }
         } else if (currentCategory) {
           // 频道名称行
           currentCategory.channels.push(trimmed);
+        } else {
+          this.parserLogger.warn({ line }, '模板中的频道缺少分类');
         }
       });
 
@@ -358,10 +382,10 @@ class IPTVAggregator {
         categories.push(currentCategory);
       }
 
-      console.log(`已加载模版，共 ${categories.length} 个分类`);
+      this.logger.info({ templateFile, categoryCount: categories.length }, '模板加载完成');
       return categories;
     } catch (error) {
-      console.error(`读取模版文件失败: ${error.message}`);
+      this.logger.error({ err: error, templateFile }, '读取模版文件失败');
       return null;
     }
   }
@@ -423,8 +447,7 @@ class IPTVAggregator {
     });
 
     fs.writeFileSync(outputFile, content, 'utf-8');
-    console.log(`已根据模版导出 M3U 格式到: ${outputFile}`);
-    console.log(`模版中匹配到 ${totalMatched} 个频道源`);
+    this.logger.info({ outputFile, matchedStreams: totalMatched }, '已根据模板导出 M3U 文件');
   }
 
   /**
@@ -469,6 +492,22 @@ class IPTVAggregator {
   }
 
   /**
+   * 获取当前聚合后的频道源数量
+   */
+  getStreamCount() {
+    if (this.totalStreams) {
+      return this.totalStreams;
+    }
+
+    let total = 0;
+    for (const channelList of this.channels.values()) {
+      total += channelList.length;
+    }
+    this.totalStreams = total;
+    return total;
+  }
+
+  /**
    * 导出为 M3U 格式（默认格式，不使用模版，支持完整属性和 EPG）
    */
   exportM3U(outputFile = 'output.m3u') {
@@ -503,7 +542,7 @@ class IPTVAggregator {
     });
 
     fs.writeFileSync(outputFile, content, 'utf-8');
-    console.log(`已导出 M3U 格式到: ${outputFile}`);
+    this.logger.info({ outputFile }, '已导出默认 M3U 文件');
   }
 
   /**
@@ -524,7 +563,7 @@ class IPTVAggregator {
     });
 
     fs.writeFileSync(outputFile, content, 'utf-8');
-    console.log(`已导出 TXT 格式到: ${outputFile}`);
+    this.logger.info({ outputFile }, '已导出 TXT 文件');
   }
 }
 
@@ -551,10 +590,14 @@ async function main() {
   aggregator.exportM3UWithTemplate('template.txt', 'output.m3u');
   aggregator.exportTXT('output.txt');
 
-  console.log('\n任务完成！');
+  aggregator.logger.info({}, '任务完成');
 }
 
 // 只在直接运行 index.js 时执行主程序
 if (require.main === module) {
-  main().catch(console.error);
+  main().catch(error => {
+    const logger = createLogger({ module: 'aggregator' });
+    logger.error({ err: error }, '聚合任务执行失败');
+    process.exitCode = 1;
+  });
 }
